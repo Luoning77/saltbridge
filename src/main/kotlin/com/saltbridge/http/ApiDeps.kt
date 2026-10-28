@@ -1,7 +1,7 @@
 package com.saltbridge.http
 
 import com.saltbridge.core.Clock
-import com.saltbridge.core.LyricsPayload
+import com.saltbridge.core.LyricsRead
 import com.saltbridge.core.Snapshot
 
 /**
@@ -28,8 +28,8 @@ interface ApiDeps {
     /** 当前快照；服务正在停止时返回 null。 */
     fun snapshot(): Snapshot?
 
-    /** 当前歌词正文；与 [snapshot] 必须来自同一状态，由实现保证。 */
-    fun lyrics(): LyricsPayload?
+    /** 一次读取同一状态的曲目快照和歌词正文。 */
+    fun lyrics(): LyricsRead?
 
     fun libraryReadGranted(): Boolean
 

@@ -5,7 +5,7 @@ import com.saltbridge.core.EngineConfig
 import com.saltbridge.core.HostState
 import com.saltbridge.core.Input
 import com.saltbridge.core.LyricLine
-import com.saltbridge.core.LyricsPayload
+import com.saltbridge.core.LyricsRead
 import com.saltbridge.core.LyricsQuery
 import com.saltbridge.core.ScheduledHandle
 import com.saltbridge.core.Scheduler
@@ -424,7 +424,7 @@ class BridgeCore(
 
         override fun snapshot(): Snapshot? = this@BridgeCore.snapshot()
 
-        override fun lyrics(): LyricsPayload? = if (alive.get()) engine.lyricsPayload() else null
+        override fun lyrics(): LyricsRead? = if (alive.get()) engine.lyricsRead() else null
 
         override fun libraryReadGranted(): Boolean = this@BridgeCore.libraryReadGranted()
 

@@ -3,7 +3,7 @@ package com.saltbridge.http
 import com.google.gson.JsonParser
 import com.saltbridge.core.Clock
 import com.saltbridge.core.FakeClock
-import com.saltbridge.core.LyricsPayload
+import com.saltbridge.core.LyricsRead
 import com.saltbridge.core.Snapshot
 import java.nio.charset.StandardCharsets
 import kotlin.test.Test
@@ -43,7 +43,7 @@ class ControlEndpointTest {
         override fun hostChannel(): String = "Steam"
         override fun compiledApiVersion(): String = "0.1.0-dev23"
         override fun snapshot(): Snapshot? = null
-        override fun lyrics(): LyricsPayload? = null
+        override fun lyrics(): LyricsRead? = null
         override fun libraryReadGranted(): Boolean = true
         override fun cover(generation: Long, trackId: String): CoverResult = CoverResult.Unavailable
         override fun token(): String = "sb_test"
@@ -111,6 +111,15 @@ class ControlEndpointTest {
 
     private fun code(response: ApiResponse): String =
         body(response).getAsJsonObject("error").get("code").asString
+
+    @Test
+    fun `seek rejects fractional and overflowing positions before admission`() {
+        for (position in listOf("-0.5", "1.5", "18446744073709551616", "1e100")) {
+            val (response, deps) = postAndDeps(valid(command = "seek", position = position, generation = "3"))
+            assertEquals(400, response.status, position)
+            assertEquals(null, deps.captured, position)
+        }
+    }
 
     @Test
     fun `valid play is accepted with 202`() {

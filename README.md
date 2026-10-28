@@ -6,8 +6,6 @@
 
 ![version](https://img.shields.io/badge/version-0.1.0-blue) ![protocol](https://img.shields.io/badge/protocol-v1.0-green) ![platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey) ![host](https://img.shields.io/badge/SPW-%E2%89%A51.19.0-orange)
 
-![screenshot](docs/images/screenshot.png)
-
 [English](README_en.md) ｜ 简体中文
 
 </div>
@@ -106,13 +104,13 @@ cd ../saltbridge
 curl -X POST http://127.0.0.1:8737/api/v1/control \
   -H "Authorization: Bearer sb_你的令牌" \
   -H "Content-Type: application/json" \
-  -d '{"requestId":"req-001","expectedInstanceId":"实例ID","command":"play"}'
+  -d '{"requestId":"req-000001","expectedInstanceId":"实例ID","command":"play"}'
 
 # 跳转到 30 秒（seek 必须带 expectedGeneration）
 curl -X POST http://127.0.0.1:8737/api/v1/control \
   -H "Authorization: Bearer sb_你的令牌" \
   -H "Content-Type: application/json" \
-  -d '{"requestId":"req-002","expectedInstanceId":"实例ID","command":"seek","positionMs":30000,"expectedGeneration":1}'
+  -d '{"requestId":"req-000002","expectedInstanceId":"实例ID","command":"seek","positionMs":30000,"expectedGeneration":1}'
 ```
 
 | 命令 | 说明 | 幂等 |
@@ -146,7 +144,7 @@ A：编辑插件数据目录下的 `config.json`，修改 `http.port`（默认 8
 
 ## 贡献
 
-欢迎提交 issue 与 PR。提交前请运行 `./gradlew test`（146 个测试）确保全绿。
+欢迎提交 issue 与 PR。提交前请运行 `./gradlew test`确保全绿。
 
 ## 许可证
 

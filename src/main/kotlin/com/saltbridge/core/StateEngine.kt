@@ -242,6 +242,10 @@ class StateEngine(
         )
     }
 
+    fun lyricsRead(): LyricsRead = synchronized(lock) {
+        LyricsRead(snapshot(), lyricsPayload())
+    }
+
     fun lyricsQuery(): LyricsQuery? = synchronized(lock) { lyrics.currentQuery() }
 
     /** `/lyrics` 专用：正文与摘要必须来自同一份状态，不能分两次读。 */

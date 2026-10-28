@@ -11,6 +11,7 @@ import com.saltbridge.core.Clock
 import com.saltbridge.core.FakeClock
 import com.saltbridge.core.LyricCell
 import com.saltbridge.core.LyricLine
+import com.saltbridge.core.LyricsRead
 import com.saltbridge.core.LyricsPayload
 import com.saltbridge.core.LyricsSnapshot
 import com.saltbridge.core.LyricsStatus
@@ -39,6 +40,8 @@ class ApiRouterTest {
         override val config: HttpConfig,
         override val clock: Clock,
     ) : ApiDeps {
+        var beforeLyricsRead: () -> Unit = {}
+        var snapshotReads = 0
         var bound = 8737
         var ready = true
         var instance = "inst-1"
@@ -69,8 +72,14 @@ class ApiRouterTest {
         override fun hostVersion(): String = "1.19.2"
         override fun hostChannel(): String = "Steam"
         override fun compiledApiVersion(): String = "0.1.0-dev23"
-        override fun snapshot(): Snapshot? = snapshotValue
-        override fun lyrics(): LyricsPayload? = lyricsValue
+        override fun snapshot(): Snapshot? {
+            snapshotReads++
+            return snapshotValue
+        }
+        override fun lyrics(): LyricsRead? {
+            beforeLyricsRead()
+            return lyricsValue?.let { LyricsRead(requireNotNull(snapshotValue), it) }
+        }
         override fun libraryReadGranted(): Boolean = libraryRead
         override fun cover(generation: Long, trackId: String): CoverResult = coverResult
         override fun token(): String = tokenValue
@@ -279,6 +288,38 @@ class ApiRouterTest {
     }
 
     // --- 歌词 ---
+
+    @Test
+    fun `lyrics does not read track state separately from its body`() {
+        val deps = deps()
+        val response = ApiRouter(deps).handle(get("/api/v1/lyrics?expectedGeneration=3"))
+        assertEquals(200, response.status)
+        assertEquals(0, deps.snapshotReads, "track and lyrics must be read atomically")
+    }
+
+    @Test
+    fun `track change before lyrics read checks the returned generation`() {
+        val deps = deps()
+        deps.beforeLyricsRead = {
+            deps.snapshotValue = sampleSnapshot(generation = 4)
+            deps.lyricsValue = payload(generation = 4)
+        }
+        val response = ApiRouter(deps).handle(get("/api/v1/lyrics?expectedGeneration=3"))
+        assertEquals(409, response.status)
+        assertEquals("generation_mismatch", errorCode(response))
+    }
+
+    @Test
+    fun `track removed before lyrics read returns no track`() {
+        val deps = deps()
+        deps.beforeLyricsRead = {
+            deps.snapshotValue = sampleSnapshot(generation = 4, trackStatus = TrackStatus.NONE, track = null)
+            deps.lyricsValue = payload(generation = 4).copy(lines = emptyList())
+        }
+        val response = ApiRouter(deps).handle(get("/api/v1/lyrics"))
+        assertEquals(404, response.status)
+        assertEquals("no_track", errorCode(response))
+    }
 
     @Test
     fun `lyrics rejects when there is no track`() {

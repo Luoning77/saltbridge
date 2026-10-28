@@ -93,6 +93,9 @@ data class LyricsSnapshot(
     val updatedAtMs: Long?,
 )
 
+/** 在同一把状态锁内读取的曲目快照与歌词正文。 */
+data class LyricsRead(val snapshot: Snapshot, val payload: LyricsPayload)
+
 /** 歌词正文出口：只在 `/lyrics` 使用，`/status` 只给摘要。 */
 data class LyricsPayload(
     val generation: Long,

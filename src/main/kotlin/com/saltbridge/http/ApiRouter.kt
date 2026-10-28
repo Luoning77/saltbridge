@@ -175,18 +175,19 @@ class ApiRouter(
         }
         val expectedInstanceId = request.query["expectedInstanceId"]
 
-        val snapshot = deps.snapshot() ?: return unavailable()
-        val payload = deps.lyrics() ?: return unavailable()
+        val read = deps.lyrics() ?: return unavailable()
+        val snapshot = read.snapshot
+        val payload = read.payload
 
         if (snapshot.trackStatus == TrackStatus.NONE) {
             return error(404, "no_track", "No current track")
         }
-        if (expectedInstanceId != null && expectedInstanceId != deps.instanceId()) {
+        if (expectedInstanceId != null && expectedInstanceId != snapshot.instanceId) {
             return error(
                 status = 409,
                 code = "instance_mismatch",
                 message = "Plugin was restarted",
-                detail = mapOf("currentInstanceId" to deps.instanceId()),
+                detail = mapOf("currentInstanceId" to snapshot.instanceId),
             )
         }
         if (expectedGeneration != null && expectedGeneration != snapshot.generation) {
@@ -201,7 +202,7 @@ class ApiRouter(
             )
         }
 
-        return ApiJson.json(200, LyricsMapper.map(payload, deps.instanceId(), deps.clock.nowMs()))
+        return ApiJson.json(200, LyricsMapper.map(payload, snapshot.instanceId, deps.clock.nowMs()))
     }
 
     private fun cover(request: ApiRequest): ApiResponse {
@@ -348,7 +349,8 @@ class ApiRouter(
             if (!rawPosition.isJsonPrimitive || !rawPosition.asJsonPrimitive.isNumber) {
                 return error(400, "invalid_position", "positionMs must be an integer")
             }
-            positionMs = rawPosition.asLong
+            positionMs = rawPosition.asString.toLongOrNull()
+                ?: return error(400, "invalid_position", "positionMs must be an integer within Long range")
             if (positionMs < 0) {
                 return error(
                     status = 400,

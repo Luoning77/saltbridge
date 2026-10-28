@@ -6,8 +6,6 @@
 
 ![version](https://img.shields.io/badge/version-0.1.0-blue) ![protocol](https://img.shields.io/badge/protocol-v1.0-green) ![platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey) ![host](https://img.shields.io/badge/SPW-%E2%89%A51.19.0-orange)
 
-![screenshot](docs/images/screenshot.png)
-
 English ｜ [简体中文](README.md)
 
 </div>
@@ -106,13 +104,13 @@ Replace `mavenLocal()` with `maven("https://jitpack.io")` in `settings.gradle.kt
 curl -X POST http://127.0.0.1:8737/api/v1/control \
   -H "Authorization: Bearer sb_YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"requestId":"req-001","expectedInstanceId":"INSTANCE_ID","command":"play"}'
+  -d '{"requestId":"req-000001","expectedInstanceId":"INSTANCE_ID","command":"play"}'
 
 # Seek to 30 seconds (seek requires expectedGeneration)
 curl -X POST http://127.0.0.1:8737/api/v1/control \
   -H "Authorization: Bearer sb_YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"requestId":"req-002","expectedInstanceId":"INSTANCE_ID","command":"seek","positionMs":30000,"expectedGeneration":1}'
+  -d '{"requestId":"req-000002","expectedInstanceId":"INSTANCE_ID","command":"seek","positionMs":30000,"expectedGeneration":1}'
 ```
 
 | Command | Description | Idempotent |
@@ -146,7 +144,7 @@ A: Edit `config.json` in the plugin data directory, change `http.port` (default 
 
 ## Contributing
 
-Issues and PRs welcome. Run `./gradlew test` (146 tests) before submitting.
+Issues and PRs welcome. Run `./gradlew test` before submitting.
 
 ## License
 
