@@ -1,0 +1,10 @@
+# 本地项目上下文
+/promat.md
+
+# 构建与编辑器文件
+.gradle/
+.kotlin/
+**/build/
+.idea/
+*.iml
+.DS_Store
