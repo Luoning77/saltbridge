@@ -2,6 +2,7 @@ package com.saltbridge.http
 
 import com.saltbridge.core.Clock
 import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 
 sealed interface CoverResult {
     data class Ready(val bytes: ByteArray, val contentType: String) : CoverResult
@@ -57,54 +58,66 @@ class CoverService(
 
     private val lock = Any()
 
-    private val cache = object : LinkedHashMap<Key, ByteArray>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, ByteArray>?): Boolean =
-            size > config.coverCacheEntries
-    }
-
+    private val cache = LinkedHashMap<Key, ByteArray>(16, 0.75f, true)
     private val inFlight = HashSet<Key>()
-    private val failedAt = HashMap<Key, Long>()
+    private val failedAt = LinkedHashMap<Key, Long>()
+    private var cacheBytes = 0L
+    private var revision = 0L
 
     fun get(generation: Long, trackId: String): CoverResult {
         val key = Key(generation, trackId)
-
+        val ticket: Long
         synchronized(lock) {
+            val now = clock.nowMs()
+            failedAt.entries.removeIf { now - it.value >= config.coverFailureTtlMs }
             cache[key]?.let { return CoverResult.Ready(it, CoverSniffer.contentType(it)) }
-
-            val failed = failedAt[key]
-            if (failed != null) {
-                if (clock.nowMs() - failed < config.coverFailureTtlMs) {
-                    return CoverResult.Unavailable
-                }
-                failedAt.remove(key)
-            }
-
-            if (!inFlight.add(key)) return CoverResult.Pending
+            if (failedAt.containsKey(key)) return CoverResult.Unavailable
+            if (key in inFlight || inFlight.size >= config.coverPendingEntries) return CoverResult.Pending
+            inFlight.add(key)
+            ticket = revision
         }
 
-        executor.execute {
-            val bytes = runCatching { loader(trackId) }
-                .getOrNull()
-                ?.takeIf { it.isNotEmpty() && it.size <= config.coverMaxBytes }
-
+        try {
+            executor.execute {
+                // clear() 后尚未执行的工作不再调用宿主。
+                if (synchronized(lock) { ticket != revision }) return@execute
+                val bytes = runCatching { loader(trackId) }.getOrNull()
+                    ?.takeIf { it.isNotEmpty() && it.size <= config.coverMaxBytes && it.size <= config.coverCacheMaxBytes }
+                synchronized(lock) {
+                    // 清理和交付在同一把锁内校验，避免旧任务重新填回缓存。
+                    if (ticket != revision) return@synchronized
+                    inFlight.remove(key)
+                    if (bytes == null) {
+                        failedAt[key] = clock.nowMs()
+                        while (failedAt.size > config.coverFailureEntries) {
+                            failedAt.remove(failedAt.keys.first())
+                        }
+                    } else {
+                        cache.put(key, bytes)?.let { cacheBytes -= it.size }
+                        cacheBytes += bytes.size
+                        while (cache.size > config.coverCacheEntries || cacheBytes > config.coverCacheMaxBytes) {
+                            val eldest = cache.entries.iterator()
+                            cacheBytes -= eldest.next().value.size
+                            eldest.remove()
+                        }
+                        failedAt.remove(key)
+                    }
+                }
+            }
+        } catch (_: RejectedExecutionException) {
             synchronized(lock) {
-                inFlight.remove(key)
-                if (bytes == null) {
-                    failedAt[key] = clock.nowMs()
-                } else {
-                    cache[key] = bytes
-                    failedAt.remove(key)
-                }
+                if (ticket == revision) inFlight.remove(key)
             }
         }
-
         return CoverResult.Pending
     }
 
-    /** 换实例时整体丢弃。 */
+    /** 换实例或停用时丢弃；迟到任务不能恢复缓存。 */
     fun clear() {
         synchronized(lock) {
+            revision++
             cache.clear()
+            cacheBytes = 0L
             inFlight.clear()
             failedAt.clear()
         }

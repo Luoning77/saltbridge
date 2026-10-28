@@ -125,6 +125,8 @@ curl -X POST http://127.0.0.1:8737/api/v1/control \
 
 完整协议（字段表、错误码、客户端实现指南）见 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
 
+后台任务、日志轮转与缓存上限见 [性能说明](docs/PERFORMANCE.md)。当前尚未提供本地曲库列表 HTTP 接口。
+
 ## FAQ
 
 **Q1：`/status` 的 `state` 为什么是 `unknown`？**

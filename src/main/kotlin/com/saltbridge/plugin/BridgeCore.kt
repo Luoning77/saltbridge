@@ -34,6 +34,7 @@ import com.xuncorp.spw.workshop.api.PluginContext
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionHandler
 import java.util.concurrent.ThreadFactory
@@ -86,7 +87,7 @@ class BridgeCore(
         RejectedExecutionHandler { _, _ -> droppedEvents.incrementAndGet() },
     )
 
-    private val io = Executors.newSingleThreadExecutor(threadFactory("saltbridge-io"))
+    private val io = boundedWorker("saltbridge-io", 8, latestOnly = true)
     private val poller = Executors.newSingleThreadScheduledExecutor(threadFactory("saltbridge-poll"))
     private val timer = Executors.newSingleThreadScheduledExecutor(threadFactory("saltbridge-timer"))
 
@@ -124,7 +125,7 @@ class BridgeCore(
     private val tokenProvider = TokenProvider(tokenStore)
 
     private val bootstrap = Executors.newSingleThreadExecutor(threadFactory("saltbridge-bootstrap"))
-    private val coverExecutor = Executors.newSingleThreadExecutor(threadFactory("saltbridge-cover"))
+    private val coverExecutor = boundedWorker("saltbridge-cover", httpConfig.coverPendingEntries)
     private val coverService = CoverService(httpConfig, clock, coverExecutor, hostPort::cover)
 
     /** 控制命令串行队列：HTTP 线程只做校验与入队，绝不直接调宿主。 */
@@ -203,10 +204,12 @@ class BridgeCore(
         poller.shutdownNow()
         timer.shutdownNow()
         io.shutdownNow()
-        events.shutdown()
-        runCatching { events.awaitTermination(200, TimeUnit.MILLISECONDS) }
         events.shutdownNow()
         log.close()
+    }
+
+    fun logStartupDuration(durationMs: Long) {
+        log.line("startup.ready", "backgroundMs=$durationMs")
     }
 
     fun onUpdate() {
@@ -227,7 +230,7 @@ class BridgeCore(
         engine.onInput(Input.IsPlayingChanged(isPlaying))
     }
 
-    fun onPosition(positionMs: Long) = dispatch("host.position", "ms=$positionMs") {
+    fun onPosition(positionMs: Long) = submit {
         engine.onInput(Input.PositionUpdated(positionMs))
     }
 
@@ -294,7 +297,7 @@ class BridgeCore(
      */
     private fun requestLyrics(query: LyricsQuery, complete: (LyricsQuery, List<LyricLine>) -> Unit) {
         io.execute {
-            if (!alive.get()) return@execute
+            if (!alive.get() || engine.lyricsQuery() != query) return@execute
             val lines = runCatching { hostPort.lyricsLines() }
                 .onFailure { log.line("lyrics.readFailed", it.javaClass.simpleName) }
                 .getOrNull() ?: return@execute
@@ -493,6 +496,11 @@ class BridgeCore(
         append(" n").append(s.lyrics.lineCount)
         append(" assoc=").append(s.lyrics.association.name)
     }
+
+    private fun boundedWorker(name: String, capacity: Int, latestOnly: Boolean = false) = ThreadPoolExecutor(
+        1, 1, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(capacity), threadFactory(name),
+        if (latestOnly) ThreadPoolExecutor.DiscardOldestPolicy() else ThreadPoolExecutor.AbortPolicy(),
+    )
 
     private fun threadFactory(name: String): ThreadFactory = ThreadFactory { runnable ->
         Thread(runnable, name).apply { isDaemon = true }

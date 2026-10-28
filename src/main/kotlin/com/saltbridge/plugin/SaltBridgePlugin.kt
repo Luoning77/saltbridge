@@ -15,7 +15,7 @@ class SaltBridgePlugin(pluginContext: PluginContext) : SpwPlugin(pluginContext) 
     override fun start() {
         val started = CoreRegistry.start(pluginContext)
         toast(
-            if (started) "SaltBridge 已启动：logs/bridge.log" else "SaltBridge 启动失败：无法读取插件数据目录",
+            if (started) "SaltBridge 正在后台启动：logs/bridge.log" else "SaltBridge 启动失败",
             success = started,
         )
     }

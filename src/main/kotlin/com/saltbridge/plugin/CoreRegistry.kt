@@ -28,27 +28,49 @@ object CoreRegistry {
 
     fun current(): BridgeCore? = ref.get()?.takeIf { it.isActive }
 
-    fun start(context: PluginContext): Boolean {
-        if (ref.get()?.isActive == true) return true
+    private val lifecycleLock = Any()
+    private var startup: Thread? = null
 
-        val dir = runCatching { dataDir() }.getOrNull() ?: return false
-        val tokenStore = runCatching {
-            ConfigTokenStore(WorkshopApi.manager.createConfigManager().getConfig())
-        }.getOrNull() ?: MemoryTokenStore()
-
-        val (httpConfig, pollIntervalMs) = loadRuntimeConfig()
-
-        val core = BridgeCore(
-            context = context,
-            epoch = epochCounter.incrementAndGet(),
-            dataDir = dir,
-            tokenStore = tokenStore,
-            pollIntervalMs = pollIntervalMs,
-            httpConfig = httpConfig,
-        )
-        ref.set(core)
-        core.start()
-        return true
+    /** 启动线程只登记生命周期；配置、文件与令牌初始化全部在后台。 */
+    fun start(context: PluginContext): Boolean = synchronized(lifecycleLock) {
+        if (ref.get()?.isActive == true || startup?.isAlive == true) return true
+        val ticket = epochCounter.incrementAndGet()
+        startup = Thread({
+            val startedAt = System.nanoTime()
+            try {
+                val dir = dataDir()
+                val tokenStore = runCatching {
+                    ConfigTokenStore(WorkshopApi.manager.createConfigManager().getConfig())
+                }.getOrNull() ?: MemoryTokenStore()
+                val (httpConfig, pollIntervalMs) = loadRuntimeConfig()
+                synchronized(lifecycleLock) {
+                    if (ticket != epochCounter.get() || Thread.currentThread().isInterrupted) return@Thread
+                    val core = BridgeCore(
+                        context = context,
+                        epoch = ticket,
+                        dataDir = dir,
+                        tokenStore = tokenStore,
+                        pollIntervalMs = pollIntervalMs,
+                        httpConfig = httpConfig,
+                    )
+                    ref.set(core)
+                    core.start()
+                }
+                // 保留自动配对，但不能在宿主启动线程等待令牌和文件写入。
+                val core = ref.get()
+                if (ticket == epochCounter.get() && core?.epoch == ticket) {
+                    val token = core.token()
+                    if (ticket == epochCounter.get()) writePairingToken(token)
+                    core.logStartupDuration((System.nanoTime() - startedAt) / 1_000_000L)
+                }
+            } catch (_: Exception) {
+                // 初始化失败保持未运行，避免后台异常拖垮宿主。
+                if (ticket == epochCounter.get()) {
+                    System.err.println("SaltBridge: background initialization failed")
+                }
+            }
+        }, "saltbridge-init").apply { isDaemon = true; start() }
+        true
     }
 
     /**
@@ -76,8 +98,13 @@ object CoreRegistry {
     }
 
     fun stop() {
-        val core = ref.getAndSet(null) ?: return
-        core.stop()
+        val core = synchronized(lifecycleLock) {
+            epochCounter.incrementAndGet()
+            startup?.interrupt()
+            startup = null
+            ref.getAndSet(null)
+        }
+        core?.stop()
     }
 
     fun onUpdate() {
@@ -85,9 +112,8 @@ object CoreRegistry {
     }
 
     fun onDelete() {
-        val core = ref.getAndSet(null) ?: return
-        core.onDelete()
-        core.stop()
+        current()?.onDelete()
+        stop()
     }
 
     fun logMarker() {
@@ -120,11 +146,30 @@ object CoreRegistry {
         return runCatching {
             Files.createDirectories(file.parent)
             Files.writeString(file, core.token() + "\n")
+            writePairingToken(core.token())
             file
         }.getOrNull()
     }
 
-    fun resetToken(): String? = current()?.resetToken()
+    fun resetToken(): String? {
+        val token = current()?.resetToken() ?: return null
+        writePairingToken(token)
+        return token
+    }
+
+    /**
+     * 配对文件：把令牌同时写一份到用户主目录 `~/.saltbridge/token.txt`。
+     * 供本机可信客户端（如 DangoMusic）自动发现，免手动粘贴；
+     * 仅本机用户可读写，令牌仍不进日志、不出回环。
+     */
+    fun writePairingToken(token: String) {
+        runCatching {
+            val home = System.getProperty("user.home") ?: return
+            val pair = Path.of(home, ".saltbridge", "token.txt")
+            Files.createDirectories(pair.parent)
+            Files.writeString(pair, token + "\n")
+        }
+    }
 
     fun httpPort(): Int = current()?.httpPort() ?: 0
 
