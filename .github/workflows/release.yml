@@ -1,0 +1,66 @@
+name: Release
+
+# 与 band-heart-rate 的 release.yml 相同的触发方式：发布 GitHub Release 时自动构建并上传产物
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    defaults:
+      run:
+        working-directory: saltbridge
+
+    steps:
+      # Workshop API 开源，构建前临时拉取并发布到本机 Maven（ref 与 build.gradle.kts 中的依赖版本保持一致）
+      - name: Checkout Workshop API
+        uses: actions/checkout@v5
+        with:
+          repository: Moriafly/spw-workshop-api
+          ref: 0.1.0-dev23
+          path: spw-workshop-api
+
+      - name: Checkout saltbridge
+        uses: actions/checkout@v5
+        with:
+          path: saltbridge
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Publish Workshop API to local Maven
+        working-directory: spw-workshop-api
+        run: ./gradlew publishToMavenLocal
+
+      - name: Get version
+        id: version
+        run: |
+          version="${GITHUB_REF#refs/tags/}"
+          # 去掉可能的 v 前缀（v0.2.0 -> 0.2.0）
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Update build.gradle.kts version
+        run: sed -i 's/^version = ".*"/version = "${{ steps.version.outputs.version }}"/' build.gradle.kts
+
+      - name: Build
+        run: ./gradlew test plugin
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: saltbridge/build/libs/plugin-com.saltbridge-${{ steps.version.outputs.version }}.spmod
+          fail_on_unmatched_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}

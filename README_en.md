@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/saltbridge-cover.png" alt="SaltBridge cover" width="100%">
+
 # SaltBridge
 
 **Provides playback state, lyrics, cover art, and playback control from Salt Player to desktop applications**

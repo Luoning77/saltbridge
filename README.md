@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/saltbridge-cover.png" alt="SaltBridge 封面图" width="100%">
+
 # SaltBridge · 盐桥
 
 **为桌面应用提供 Salt Player 的播放状态、歌词、封面与播放控制接口**
