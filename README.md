@@ -4,9 +4,9 @@
 
 # SaltBridge · 盐桥
 
-**为桌面应用提供 Salt Player 的播放状态、歌词、封面与播放控制接口**
+**为桌面应用提供 Salt Player 的本地曲库列表、播放状态、歌词、封面与播放控制接口**
 
-![version](https://img.shields.io/badge/version-0.1.0-blue) ![protocol](https://img.shields.io/badge/protocol-v1.0-green) ![platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey) ![host](https://img.shields.io/badge/SPW-%E2%89%A51.19.0-orange)
+![version](https://img.shields.io/badge/version-26.1.1-blue) ![protocol](https://img.shields.io/badge/protocol-v1.0-green) ![platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey) ![host](https://img.shields.io/badge/SPW-%E2%89%A51.19.0-orange)
 
 [English](README_en.md) ｜ 简体中文
 
@@ -14,14 +14,20 @@
 
 ## 特性
 
-- 读取当前播放曲目、歌手、专辑、时长与内嵌封面
-- 提供播放状态、进度与歌词时间轴（含逐字歌词，取决于原始数据）
-- 支持播放、暂停、上一首、下一首与进度跳转控制
-- HTTP API 仅监听 `127.0.0.1`，令牌认证，不暴露到局域网
-- 代次管理：切歌自动失效歌词/封面缓存，防止串歌
-- 歌词 stale 机制：短暂保留旧歌词作显示缓冲，回查后恢复或清除
+| 功能 | 说明 |
+| --- | --- |
+| 本地曲库列表 | 分页读取 Salt Player 已导入的本地音乐，默认每页 50 首、最多 200 首 |
+| 正在播放 | 读取当前曲目、歌手、专辑、时长、进度和内嵌封面 |
+| 歌词时间轴 | 提供逐行歌词；原始数据包含真实逐字时间时提供逐字数据 |
+| 播放控制 | 支持播放、暂停、上一首、下一首和跳转进度 |
+| 本机访问 | 仅监听 `127.0.0.1`，使用令牌认证 |
+| 后台资源管理 | 异步初始化、批量日志与日志轮转；封面缓存和后台任务有上限 |
 
 ## 快速开始
+
+从 [Releases](https://github.com/Luoning77/saltbridge/releases) 下载 `.spmod`，在 Salt Player「模组管理 → 本地导入」中安装并启用，授予“曲库读取”权限。
+
+需要源码构建时：
 
 ```bash
 # 构建（需要 JDK 25 + Gradle 9.8.0）
@@ -29,7 +35,7 @@ git clone https://github.com/Luoning77/saltbridge.git
 cd saltbridge
 ./gradlew plugin
 
-# 产物在 build/libs/plugin-com.saltbridge-0.1.0.spmod
+# 产物在 build/libs/plugin-com.saltbridge-26.1.1.spmod
 # 导入 Salt Player → 模组管理 → 本地导入 → 启用 → 只勾「曲库读取」
 ```
 
@@ -59,7 +65,7 @@ curl -H "Authorization: Bearer sb_你的令牌" http://127.0.0.1:8737/api/v1/sta
 
 **方式一：下载 .spmod（推荐）**
 
-从 [Releases](../../releases) 下载 `plugin-com.saltbridge-0.1.0.spmod`，在 Salt Player「模组管理」中本地导入。
+从 [Releases](../../releases) 下载 `plugin-com.saltbridge-26.1.1.spmod`，在 Salt Player「模组管理」中本地导入。
 
 **方式二：源码构建**
 
@@ -97,7 +103,19 @@ cd ../saltbridge
 | `/api/v1/status` | GET | 要 | 当前播放快照（状态/位置/歌词摘要） |
 | `/api/v1/lyrics` | GET | 要 | 歌词正文（逐行时间轴 + 逐字单元） |
 | `/api/v1/cover` | GET | 要 | 封面二进制（`202 pending` 异步加载） |
+| `/api/v1/library/tracks` | GET | 要 | 已导入的本地曲库列表（分页） |
 | `/api/v1/control` | POST | 要 | 播放控制（5 条命令） |
+
+### 读取本地曲库
+
+```bash
+curl -H "Authorization: Bearer sb_你的令牌" \
+  "http://127.0.0.1:8737/api/v1/library/tracks?limit=50"
+```
+
+首次查询通常返回 `202`，按 `retryAfterMs` 间隔重试同一请求，建议总等待预算 5 秒。成功后返回 `tracks` 和 `nextCursor`；下一页把游标作为 `afterId` 参数传入（需 URL 编码），游标为 `null` 时表示结束。页面缓存 10 秒，各页不是同一时刻的曲库快照。
+
+此接口只列出播放器已导入的音乐，不扫描未导入文件，不返回本地路径，也不创建歌单或点选播放。缺少权限返回 `403`，查询失败返回 `503`。本次功能仅在 SaltBridge 中提供，未修改 Minecraft Mod。
 
 ### 控制命令
 
@@ -127,7 +145,7 @@ curl -X POST http://127.0.0.1:8737/api/v1/control \
 
 完整协议（字段表、错误码、客户端实现指南）见 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
 
-后台任务、日志轮转与缓存上限见 [性能说明](docs/PERFORMANCE.md)。当前尚未提供本地曲库列表 HTTP 接口。
+后台任务、日志轮转与缓存上限见 [性能说明](docs/PERFORMANCE.md)。本地曲库列表支持通过 `/api/v1/library/tracks` 分页读取，需授权曲库读取权限。
 
 ## FAQ
 
@@ -146,6 +164,10 @@ A：`202` 只表示命令已入队，不保证执行。可能原因：宿主线�
 **Q5：如何改端口？**
 A：编辑插件数据目录下的 `config.json`，修改 `http.port`（默认 8737），重启插件生效。配置界面暂无数字输入控件。
 
+## 版本管理
+
+版本号和完整命名规则统一放在 [version.properties](version.properties)。修改其中的 `version` 值即可，构建和发布流程自动读取；发布标签需与文件一致，例如 `v26.1.1`。
+
 ## 贡献
 
 欢迎提交 issue 与 PR。提交前请运行 `./gradlew test`确保全绿。
@@ -160,4 +182,4 @@ Copyright 2026 Luoning77 and SaltBridge contributors.
 
 ---
 
-> 最近更新：2026-10-28 ｜ 版本 0.1.0 ｜ 协议 v1.0
+> 最近更新：2026-10-28 ｜ 版本 26.1.1 ｜ 协议 v1.0

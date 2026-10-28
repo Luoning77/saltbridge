@@ -1,6 +1,6 @@
 # SaltBridge HTTP 协议 v1.0
 
-本文根据 0.1.0 当前实现整理。所有时间、时长、位置均以毫秒表示；JSON 使用 UTF-8。可选字段没有值时通常为 `null`。客户端应忽略未知字段。
+本文根据 26.1.1 当前实现整理。所有时间、时长、位置均以毫秒表示；JSON 使用 UTF-8。可选字段没有值时通常为 `null`。客户端应忽略未知字段。
 
 ## 连接与认证
 
@@ -27,6 +27,7 @@
 | `/status` | GET | 200：播放快照 |
 | `/lyrics` | GET | 200：歌词正文 |
 | `/cover` | GET | 200：封面二进制；202：加载中 |
+| `/library/tracks` | GET | 200：本地曲库分页；202：后台查询中 |
 | `/control` | POST | 202：已入队；200：已接受请求的重复提交 |
 
 ### capabilities
@@ -36,7 +37,7 @@
 - `plugin`：`id`、`version`。
 - `host`：`spwVersion`、`channel`、`compiledApiVersion`。
 - `permissions.libraryRead`：曲库读取权限。
-- `features`：`status`、`lyrics`、`cover`，以及 `control` 下的 `play/pause/next/previous/seek` 布尔值。`longPoll` 和 `webSocket` 当前为 false。
+- `features`：`status`、`lyrics`、`cover`、`library`，以及 `control` 下的 `play/pause/next/previous/seek` 布尔值。`longPoll` 和 `webSocket` 当前为 false。
 - `limits`：实际限制，客户端应读取这些值；默认值见下表。
 - `assumptions`：当前为空数组。
 
@@ -140,3 +141,28 @@ seek 的最大位置为已知且大于零的曲长，否则为 86400000ms。没�
 | 503 | service_unavailable |
 
 服务停止、过载或网络失败时可能没有 JSON 响应。GET 可有界重试；控制重试必须遵守实例和 requestId 去重规则。
+
+
+### library/tracks（本地曲库列表）
+
+`GET /api/v1/library/tracks?limit=50&afterId=上一页游标`
+
+需要 Bearer 认证及曲库读取权限。`limit` 默认 50，允许 1–200；首页省略 `afterId`，下一页使用响应的 `nextCursor`，按 URL 查询参数编码。未知参数、空游标和非法页大小返回 400。游标最多 512 个字符。
+
+查询在独立有界后台执行器执行。首次请求一般返回 202，响应含 `instanceId/status=pending/retryAfterMs=500`；客户端按建议间隔重试同一页，建议总等待预算 5 秒，避免无限等待。200 示例：
+
+```json
+{
+  "instanceId": "当前实例ID",
+  "tracks": [
+    {"id":"曲库ID","title":"歌曲名","artist":"歌手","album":"专辑","durationMs":240000}
+  ],
+  "nextCursor": null
+}
+```
+
+`nextCursor=null` 表示已到末页；空库返回 200、空 `tracks` 和 null 游标。时长未知时为 null。不返回本地文件路径。接口读取 Salt Player 已导入曲库，不扫描未导入文件，也不创建歌单或触发播放。
+
+页面缓存 10 秒，最多 8 页、最多 4 个待处理查询；重复请求合并。需要更新列表时等待缓存到期再从首页读取。各页独立读取宿主曲库，不保证遍历期间跨页快照一致，刷新后从首页重新遍历。插件重启后客户端应丢弃旧请求与旧游标遍历状态。
+
+未授权或宿主查询期间权限被撤销返回 403；查询超时或失败返回 503、`error.code=library_unavailable`，可稍后重试。后台宿主查询等待上限 3 秒，取消等待不保证取消宿主底层数据库查询。能力通过 `/capabilities` 的 `features.library` 声明；旧版插件没有此字段时按不支持处理。

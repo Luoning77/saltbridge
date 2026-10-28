@@ -48,12 +48,17 @@ jobs:
       - name: Get version
         id: version
         run: |
-          version="${GITHUB_REF#refs/tags/}"
-          # 去掉可能的 v 前缀（v0.2.0 -> 0.2.0）
-          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Update build.gradle.kts version
-        run: sed -i 's/^version = ".*"/version = "${{ steps.version.outputs.version }}"/' build.gradle.kts
+          version="$(sed -n 's/^version=//p' version.properties | tr -d '\r')"
+          if ! [[ "$version" =~ ^[0-9]{2}\.[1-9][0-9]*\.[1-9][0-9]*$ ]]; then
+            echo "Invalid release version: expected v26.1.1 (year.major.build)"
+            exit 1
+          fi
+          tag="${GITHUB_REF#refs/tags/}"
+          if [[ "${tag#v}" != "$version" ]]; then
+            echo "Release tag must match version.properties ($version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: ./gradlew test plugin

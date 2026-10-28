@@ -35,6 +35,10 @@ interface ApiDeps {
 
     fun cover(generation: Long, trackId: String): CoverResult
 
+    fun librarySupported(): Boolean = false
+
+    fun libraryTracks(afterId: String?, limit: Int): LibraryResult = LibraryResult.Failed(false)
+
     fun token(): String
 
     /**

@@ -126,6 +126,8 @@ class BridgeCore(
 
     private val bootstrap = Executors.newSingleThreadExecutor(threadFactory("saltbridge-bootstrap"))
     private val coverExecutor = boundedWorker("saltbridge-cover", httpConfig.coverPendingEntries)
+    private val libraryExecutor = boundedWorker("saltbridge-library", 4)
+    private val libraryService = com.saltbridge.http.LibraryService(clock, libraryExecutor, hostPort::libraryTracks)
     private val coverService = CoverService(httpConfig, clock, coverExecutor, hostPort::cover)
 
     /** 控制命令串行队列：HTTP 线程只做校验与入队，绝不直接调宿主。 */
@@ -198,6 +200,8 @@ class BridgeCore(
         // 协议 7.1：停用插件会取消尚未执行的命令，202 不承诺一定执行
         controlQueue.clear()
         controlExecutor.shutdownNow()
+        libraryService.clear()
+        libraryExecutor.shutdownNow()
         coverService.clear()
         bootstrap.shutdownNow()
         coverExecutor.shutdownNow()
@@ -433,6 +437,10 @@ class BridgeCore(
 
         override fun cover(generation: Long, trackId: String): CoverResult =
             coverService.get(generation, trackId)
+
+        override fun librarySupported() = true
+
+        override fun libraryTracks(afterId: String?, limit: Int) = libraryService.get(afterId, limit)
 
         override fun token(): String = tokenProvider.current()
 

@@ -1,5 +1,6 @@
 import com.xuncorp.spw.workshop.gradle.PluginPermission
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.4.20"
@@ -8,7 +9,14 @@ plugins {
 }
 
 group = "com.saltbridge"
-version = "0.1.0"
+// 年.大版本.构建次数，统一从独立文件读取。
+val releaseVersion = Properties().apply {
+    rootDir.resolve("version.properties").inputStream().use { load(it) }
+}.getProperty("version")?.trim() ?: error("version.properties must define version")
+require(Regex("""[0-9]{2}\.[1-9][0-9]*\.[1-9][0-9]*""").matches(releaseVersion)) {
+    "Version must use year.major.build, for example 26.1.1"
+}
+version = releaseVersion
 
 java {
     sourceCompatibility = JavaVersion.VERSION_25
@@ -56,7 +64,7 @@ spmod {
     PluginClass = "com.saltbridge.plugin.SaltBridgePlugin"
     PluginId = "com.saltbridge"
     PluginName = "SaltBridge"
-    PluginDescription = "SaltBridge 盐桥：向本机应用提供播放状态、歌词、封面与播放控制（HTTP API）"
+    PluginDescription = "SaltBridge 盐桥：向本机应用提供本地曲库列表、播放状态、歌词、封面与播放控制（HTTP API）"
     PluginVersion = project.version.toString()
     PluginProvider = "SaltBridge"
     PluginHasConfig = true

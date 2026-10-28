@@ -2,7 +2,16 @@
 
 本项目的所有重要变更都将记录在此文件中。
 
-格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号采用“年.大版本.构建次数”，规则与当前版本统一维护在 [version.properties](version.properties)。
+
+## [26.1.1] - 2026-10-28
+
+- 新增本地曲库分页接口 `/api/v1/library/tracks`，带认证、权限检查和有界后台缓存。
+
+- 改用“年.大版本.构建次数”版本号，详见 [版本配置与规则](version.properties)。
+- 后台启动、异步日志与日志轮转；限制封面内存和后台任务数量。
+- 修复封面缓存清理后的迟到任务及队列拒绝处理。
+- 保持 HTTP 协议 v1.0。
 
 ## [0.1.0] - 2026-10-28
 

@@ -14,7 +14,7 @@ import com.saltbridge.wire.PermissionsJson
 import com.saltbridge.wire.PluginInfoJson
 import com.saltbridge.wire.SnapshotJson
 
-private enum class Endpoint { HEALTH, CAPABILITIES, STATUS, LYRICS, COVER, CONTROL }
+private enum class Endpoint { HEALTH, CAPABILITIES, STATUS, LYRICS, COVER, CONTROL, LIBRARY }
 
 private val REQUEST_ID = Regex("^[A-Za-z0-9_-]{8,64}$")
 
@@ -58,6 +58,7 @@ class ApiRouter(
             "/api/v1/status" -> Endpoint.STATUS
             "/api/v1/lyrics" -> Endpoint.LYRICS
             "/api/v1/cover" -> Endpoint.COVER
+            "/api/v1/library/tracks" -> Endpoint.LIBRARY
             "/api/v1/control" -> Endpoint.CONTROL
             else -> return error(404, "not_found", "No such endpoint: $path")
         }
@@ -84,11 +85,27 @@ class ApiRouter(
             Endpoint.STATUS -> status()
             Endpoint.LYRICS -> lyrics(request)
             Endpoint.COVER -> cover(request)
+            Endpoint.LIBRARY -> library(request)
             Endpoint.CONTROL -> control(request)
         }
     }
 
     // --- 端点 ---
+
+    private fun library(request: ApiRequest): ApiResponse {
+        if (request.query.keys.any { it !in setOf("afterId", "limit") }) return error(400, "bad_request", "Unknown query parameter")
+        val rawLimit = request.query["limit"]
+        val limit = if (rawLimit == null) 50 else rawLimit.toIntOrNull()
+        if (limit == null || limit !in 1..200) return error(400, "bad_request", "limit must be between 1 and 200")
+        val cursor = request.query["afterId"]
+        if (cursor != null && (cursor.isBlank() || cursor.length > 512)) return error(400, "bad_request", "Invalid cursor")
+        if (!deps.libraryReadGranted()) return error(403, "permission_denied", "Library read permission required")
+        return when (val result = deps.libraryTracks(cursor, limit)) {
+            LibraryResult.Pending -> ApiJson.json(202, mapOf("instanceId" to deps.instanceId(), "status" to "pending", "retryAfterMs" to 500))
+            is LibraryResult.Ready -> ApiJson.json(200, mapOf("instanceId" to deps.instanceId(), "tracks" to result.page.tracks, "nextCursor" to result.page.nextCursor))
+            is LibraryResult.Failed -> if (result.forbidden) error(403, "permission_denied", "Library read permission required") else error(503, "library_unavailable", "Library query failed; retry later")
+        }
+    }
 
     private fun health(): ApiResponse = ApiJson.json(
         200,
@@ -119,6 +136,7 @@ class ApiRouter(
                 ),
                 permissions = PermissionsJson(libraryRead = deps.libraryReadGranted()),
                 features = FeaturesJson(
+                    library = deps.librarySupported(),
                     status = true,
                     lyrics = true,
                     cover = true,

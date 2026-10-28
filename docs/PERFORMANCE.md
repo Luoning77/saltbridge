@@ -28,4 +28,4 @@
 
 这些调用需要 `LIBRARY_READ` 权限；SaltBridge 已声明此权限，但用户仍需授权。它们读取的是播放器曲库，不扫描硬盘上尚未导入的文件。
 
-SaltBridge 当前只开放 health、capabilities、status、lyrics、cover、control；尚未实现曲库列表 HTTP 端点，MC Mod 也尚未展示本地歌曲列表。后续宜增加有页大小限制的分页端点并在后台查询，避免启动时全量读取曲库。列出歌曲与点选播放是两个能力，新增后者前需另外核对播放 API。
+SaltBridge 新增 `/api/v1/library/tracks` 分页接口：默认每页 50 首、最多 200 首；查询等待上限 3 秒，最多 4 个待处理任务；页面缓存 10 秒、最多 8 页。不在启动时全量读取曲库。MC Mod 本次未修改；列出歌曲与点选播放是两个能力，新增后者前需另外核对播放 API。

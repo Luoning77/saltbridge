@@ -43,6 +43,7 @@ data class ControlFeaturesJson(
 )
 
 data class FeaturesJson(
+    val library: Boolean = false,
     val status: Boolean,
     val lyrics: Boolean,
     val cover: Boolean,

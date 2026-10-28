@@ -62,6 +62,13 @@ class ApiRouterTest {
             ),
             deduplicated = false,
         )
+        var libraryResult: LibraryResult = LibraryResult.Pending
+        var libraryCalls = 0
+        override fun librarySupported() = true
+        override fun libraryTracks(afterId: String?, limit: Int): LibraryResult {
+            libraryCalls++
+            return libraryResult
+        }
         var controlEnabled = true
 
         override fun boundPort(): Int = bound
@@ -529,4 +536,36 @@ class ApiRouterTest {
         assertNotNull(error["requestId"])
         assertFalse(error["requestId"].asString.isBlank())
     }
+    @Test fun `library requires auth and permission before querying`() {
+        val deps = deps()
+        val router = ApiRouter(deps)
+        assertEquals(401, router.handle(get("/api/v1/library/tracks", token = null)).status)
+        deps.libraryRead = false
+        assertEquals(403, router.handle(get("/api/v1/library/tracks")).status)
+        assertEquals(0, deps.libraryCalls)
+    }
+
+    @Test fun `library validates page size and cursor`() {
+        val deps = deps()
+        val router = ApiRouter(deps)
+        for (query in listOf("limit=0", "limit=201", "limit=oops", "afterId=", "extra=1")) {
+            assertEquals(400, router.handle(get("/api/v1/library/tracks?$query")).status)
+        }
+        assertEquals(0, deps.libraryCalls)
+    }
+
+    @Test fun `library returns pending and then a page without paths`() {
+        val deps = deps()
+        val router = ApiRouter(deps)
+        assertEquals(202, router.handle(get("/api/v1/library/tracks")).status)
+        deps.libraryResult = LibraryResult.Ready(LibraryPage(listOf(LibraryTrack("id-1", "Song", "Artist", "Album", 1000)), null))
+        val response = router.handle(get("/api/v1/library/tracks"))
+        assertEquals(200, response.status)
+        val json = body(response)
+        assertEquals("inst-1", json.get("instanceId").asString)
+        assertEquals("id-1", json.getAsJsonArray("tracks")[0].asJsonObject.get("id").asString)
+        assertTrue(json.get("nextCursor").isJsonNull)
+        assertFalse(String(response.body).contains("path"))
+    }
+
 }

@@ -4,9 +4,9 @@
 
 # SaltBridge
 
-**Provides playback state, lyrics, cover art, and playback control from Salt Player to desktop applications**
+**Provides local library tracks, playback state, lyrics, cover art, and playback control from Salt Player to desktop applications**
 
-![version](https://img.shields.io/badge/version-0.1.0-blue) ![protocol](https://img.shields.io/badge/protocol-v1.0-green) ![platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey) ![host](https://img.shields.io/badge/SPW-%E2%89%A51.19.0-orange)
+![version](https://img.shields.io/badge/version-26.1.1-blue) ![protocol](https://img.shields.io/badge/protocol-v1.0-green) ![platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey) ![host](https://img.shields.io/badge/SPW-%E2%89%A51.19.0-orange)
 
 English ｜ [简体中文](README.md)
 
@@ -14,22 +14,28 @@ English ｜ [简体中文](README.md)
 
 ## Features
 
-- Read current track, artist, album, duration, and embedded cover art
-- Expose playback state, position, and lyrics timeline (including word-level timing when available)
-- Control playback: play, pause, previous, next, and seek
-- HTTP API bound to `127.0.0.1` only, token-authenticated, never exposed to LAN
-- Generation-based cache invalidation: switching tracks automatically invalidates lyrics/cover caches
-- Lyrics stale mechanism: briefly retains old lyrics as display buffer, then recovers or clears after recheck
+| Feature | Description |
+| --- | --- |
+| Local library | Paginate imported Salt Player tracks: 50 per page by default, up to 200 |
+| Now playing | Current track, artist, album, duration, position, and embedded cover |
+| Lyrics | Line timing and real word timing when available in the source data |
+| Playback controls | Play, pause, previous, next, and seek |
+| Local access | Listens on `127.0.0.1` only, with token authentication |
+| Resource management | Background initialization, buffered logs with rotation, bounded cover cache and tasks |
 
 ## Quick Start
 
+Download a `.spmod` from [Releases](https://github.com/Luoning77/saltbridge/releases), import it in Salt Player’s Mod Manager, enable it, and grant Library Read permission.
+
+To build from source:
+
 ```bash
 # Build (requires JDK 25 + Gradle 9.8.0)
-git clone https://github.com/[username]/saltbridge.git
+git clone https://github.com/Luoning77/saltbridge.git
 cd saltbridge
 ./gradlew plugin
 
-# Artifact at build/libs/plugin-com.saltbridge-0.1.0.spmod
+# Artifact at build/libs/plugin-com.saltbridge-26.1.1.spmod
 # Import into Salt Player → Mod Manager → Local Import → Enable → Check "Library Read"
 ```
 
@@ -59,7 +65,7 @@ curl -H "Authorization: Bearer sb_YOUR_TOKEN" http://127.0.0.1:8737/api/v1/statu
 
 **Option 1: Download .spmod (recommended)**
 
-Download `plugin-com.saltbridge-0.1.0.spmod` from [Releases](../../releases), import via Salt Player's Mod Manager.
+Download `plugin-com.saltbridge-26.1.1.spmod` from [Releases](../../releases), import via Salt Player's Mod Manager.
 
 **Option 2: Build from source**
 
@@ -97,7 +103,19 @@ Replace `mavenLocal()` with `maven("https://jitpack.io")` in `settings.gradle.kt
 | `/api/v1/status` | GET | Yes | Current playback snapshot (state/position/lyrics summary) |
 | `/api/v1/lyrics` | GET | Yes | Lyrics body (line timeline + word cells) |
 | `/api/v1/cover` | GET | Yes | Cover art binary (`202 pending` async loading) |
+| `/api/v1/library/tracks` | GET | Yes | Imported local library tracks (paginated) |
 | `/api/v1/control` | POST | Yes | Playback control (5 commands) |
+
+### Read the Local Library
+
+```bash
+curl -H "Authorization: Bearer sb_YOUR_TOKEN" \
+  "http://127.0.0.1:8737/api/v1/library/tracks?limit=50"
+```
+
+An initial `202` means the query is pending. Retry the same request after `retryAfterMs`, with a suggested total waiting budget of 5 seconds. A successful response contains `tracks` and `nextCursor`. Pass the URL-encoded cursor as `afterId` for the next page; `null` marks the end. Pages are cached for 10 seconds and do not form a single database snapshot.
+
+Only tracks already imported into Salt Player are listed. This endpoint does not scan files, expose local paths, manage playlists, or start playback of a selected track. Missing permission returns `403`; query failures return `503`. This addition is in SaltBridge only; the Minecraft Mod is unchanged.
 
 ### Control Commands
 
@@ -144,6 +162,10 @@ A: `202` means the command was enqueued, not executed. Possible reasons: host th
 **Q5: How do I change the port?**
 A: Edit `config.json` in the plugin data directory, change `http.port` (default 8737), restart the plugin. The config UI has no numeric input control yet.
 
+## Version Management
+
+The current version and naming rules are maintained together in [version.properties](version.properties). Edit its `version` value; builds and releases read this file. Release tags must match it, for example `v26.1.1`.
+
 ## Contributing
 
 Issues and PRs welcome. Run `./gradlew test` before submitting.
@@ -158,4 +180,4 @@ Clients may freely implement the protocol (`docs/PROTOCOL.md`). Connecting to Sa
 
 ---
 
-> Last updated: 2026-10-28 ｜ Version 0.1.0 ｜ Protocol v1.0
+> Last updated: 2026-10-28 ｜ Version 26.1.1 ｜ Protocol v1.0

@@ -21,6 +21,9 @@ sealed interface PollOutcome {
  * 因此可以在没有宿主的 JVM 里用假实现跑线程与调度测试。
  */
 interface HostPort {
+    fun libraryTracks(afterId: String?, limit: Int): List<com.saltbridge.http.LibraryTrack> =
+        throw UnsupportedOperationException("Library listing unavailable")
+
     /** 阻塞调用，只能在轮询线程执行。 */
     fun poll(): PollOutcome
 
@@ -50,6 +53,11 @@ interface HostPort {
 }
 
 class WorkshopHostPort : HostPort {
+    override fun libraryTracks(afterId: String?, limit: Int): List<com.saltbridge.http.LibraryTrack> =
+        WorkshopApi.library.getTracks(afterId, limit).toCompletableFuture().get(3_000, TimeUnit.MILLISECONDS).map {
+            com.saltbridge.http.LibraryTrack(it.id, it.title.take(1024), it.artist.take(1024), it.album.take(1024), it.duration.takeIf { d -> d > 0 })
+        }
+
 
     override fun poll(): PollOutcome = try {
         PollOutcome.Available(
