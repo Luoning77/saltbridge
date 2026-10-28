@@ -1,0 +1,38 @@
+{
+  "configs": [
+    {
+      "title": "SaltBridge",
+      "config": "config.json",
+      "preferences": [
+        {
+          "type": "button",
+          "title": "显示访问令牌",
+          "summary": "写入 token.txt 并 toast 提示；接口为 http://127.0.0.1:8737",
+          "arrow_type": "none",
+          "on_click": "com.saltbridge.plugin.BridgeActions.showToken"
+        },
+        {
+          "type": "button",
+          "title": "重置访问令牌",
+          "summary": "立即生成新令牌，旧令牌马上失效",
+          "arrow_type": "none",
+          "on_click": "com.saltbridge.plugin.BridgeActions.resetToken"
+        },
+        {
+          "type": "button",
+          "title": "导出状态快照",
+          "summary": "按协议 5.3 字段写入 reports/state-snapshot.json",
+          "arrow_type": "none",
+          "on_click": "com.saltbridge.plugin.BridgeActions.exportSnapshot"
+        },
+        {
+          "type": "button",
+          "title": "写入日志分隔线",
+          "summary": "日志为追加模式，不删除历史记录",
+          "arrow_type": "none",
+          "on_click": "com.saltbridge.plugin.BridgeActions.insertLogMarker"
+        }
+      ]
+    }
+  ]
+}

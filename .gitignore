@@ -1,5 +1,11 @@
-# 本地项目上下文
+# 本地项目上下文（不纳入版本管理）
 /promat.md
+
+# 本地记录与运行时产物
+/reports/
+*.log
+token.txt
+*.spmod
 
 # 构建与编辑器文件
 .gradle/
